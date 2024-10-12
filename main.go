@@ -10,12 +10,15 @@ import (
 	"path/filepath"
 	"unicode"
 
+	"github.com/PondWader/go-obf/pkg"
 	"golang.org/x/mod/modfile"
 )
 
 // https://pkg.go.dev/go/ast#pkg-examples
 
 func main() {
+	pkg.Cow()
+
 	buildDir := os.Getenv("OBF_BUILD_DIR")
 	if buildDir == "" {
 		buildPath, err := os.MkdirTemp("", "go-obf-build")
@@ -117,6 +120,7 @@ func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacemen
 	}
 }
 
+//obf:preserve-fields
 type File struct {
 	Content      string
 	Replacements []*ast.Ident

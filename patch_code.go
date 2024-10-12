@@ -47,8 +47,10 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 		Files: make([]File, len(resolvedPkg.Syntax)),
 	}
 
+	fset := resolvedPkg.Fset
+
 	for i, file := range resolvedPkg.Syntax {
-		filePath := resolvedPkg.Fset.File(file.Pos()).Name()
+		filePath := fset.File(file.Pos()).Name()
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Fatalf("failed to read %s: %s", filePath, err)
@@ -57,11 +59,13 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 		f := File{
 			Content:      string(content),
 			Replacements: make([]*ast.Ident, 0),
-			Fset:         resolvedPkg.Fset,
+			Fset:         fset,
 			Ast:          file,
 		}
 
 		importIdents := make(map[string]bool)
+
+		preserveFieldsLine := -1
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch t := n.(type) {
@@ -71,10 +75,11 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 				name := build.patchPackage(path)
 
 				if t.Name != nil {
-					importIdents[t.Name.Name] = true
-				} else {
-					importIdents[name] = true
+					name = t.Name.Name
 				}
+
+				build.ExcludedIdents[name] = true
+				importIdents[name] = true
 				return false
 
 			case *ast.SelectorExpr: // Stop import selectors from having names changed
@@ -87,6 +92,24 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 
 			case *ast.Ident:
 				f.Replacements = append(f.Replacements, t)
+
+			case *ast.Comment:
+				line := fset.Position(t.Pos()).Line
+				if strings.TrimSpace(t.Text) == "//obf:preserve-fields" {
+					preserveFieldsLine = line
+				}
+
+			case *ast.StructType:
+				line := fset.Position(t.Pos()).Line
+				// If the struct follows a preserve fields directive then field names should be added to the excluded identifiers
+				if line == preserveFieldsLine+1 {
+					for _, field := range t.Fields.List {
+						for _, name := range field.Names {
+							build.ExcludedIdents[name.Name] = true
+						}
+					}
+					return false
+				}
 			}
 
 			return true
