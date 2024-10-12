@@ -18,16 +18,6 @@ import (
 //obf:protect
 const EXAMPLE_SECRET = "abc"
 
-var TYPE_IDENTIFIERS = []string{
-	"bool",
-	"uint", "u8", "u16", "u32", "u64", "uintptr",
-	"int", "i8", "i16", "i32", "i64",
-	"float32", "float64",
-	"complex64", "complex128",
-	"string", "struct", "byte", "rune",
-	"map", "chan",
-}
-
 func main() {
 	buildDir := os.Getenv("OBF_BUILD_DIR")
 	if buildDir == "" {
@@ -43,8 +33,8 @@ func main() {
 	}
 
 	excludedIdents := make(map[string]bool)
-	for _, typeIdent := range TYPE_IDENTIFIERS {
-		excludedIdents[typeIdent] = true
+	for _, builtin := range builtins {
+		excludedIdents[builtin] = true
 	}
 
 	build := &ObfBuild{
@@ -58,6 +48,13 @@ func main() {
 	build.patchModule()
 	build.patchPackage(".")
 
+	remapper := Remapper{
+		Build:           build,
+		PublicIdentGen:  NewIdentGen(CHARSET_UPPERCASE),
+		PrivateIdentGen: NewIdentGen(CHARSET_LOWERCASE),
+		identMap:        make(map[string]string),
+	}
+
 	for path, pkg := range build.Packages {
 		dirPath := filepath.Join(buildDir, path)
 		if err := os.MkdirAll(dirPath, 0600); err != nil {
@@ -68,7 +65,7 @@ func main() {
 
 		for _, file := range pkg.Files {
 			transform := NewTransform(file.Fset, file.Ast, file.Content)
-			build.ApplyReplacements(transform, file.Replacements)
+			remapper.ApplyReplacements(transform, file.Replacements)
 			fileName := filepath.Join(dirPath, fileNameGen.Next()+".go")
 			err := os.WriteFile(fileName, []byte(transform.content), 0600)
 			if err != nil {
@@ -80,11 +77,16 @@ func main() {
 	fmt.Println("Obfuscated in", buildDir)
 }
 
-func (build ObfBuild) ApplyReplacements(transform *CodeTransform, replacements []*ast.Ident) {
-	publicIdentGen := NewIdentGen(CHARSET_LOWERCASE)
-	privateIdentGen := NewIdentGen(CHARSET_UPPERCASE)
+type Remapper struct {
+	Build           *ObfBuild
+	PublicIdentGen  IdentGen
+	PrivateIdentGen IdentGen
 
-	identMap := make(map[string]string)
+	identMap map[string]string
+}
+
+func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacements []*ast.Ident) {
+	build := remapper.Build
 
 	for _, replacement := range replacements {
 		name := replacement.Name
@@ -93,14 +95,14 @@ func (build ObfBuild) ApplyReplacements(transform *CodeTransform, replacements [
 			continue
 		}
 
-		replacementIdent, ok := identMap[name]
+		replacementIdent, ok := remapper.identMap[name]
 		if !ok {
 			if unicode.IsUpper(rune(name[0])) {
-				replacementIdent = privateIdentGen.Next()
+				replacementIdent = remapper.PublicIdentGen.Next()
 			} else {
-				replacementIdent = publicIdentGen.Next()
+				replacementIdent = remapper.PrivateIdentGen.Next()
 			}
-			identMap[name] = replacementIdent
+			remapper.identMap[name] = replacementIdent
 		}
 
 		transform.Replace(replacement, replacementIdent)
