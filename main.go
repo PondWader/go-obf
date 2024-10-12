@@ -26,8 +26,8 @@ func main() {
 		NameGen:           NewIdentGen(CHARSET_LOWERCASE),
 		OutPath:           buildPath,
 		Packages:          make(map[string]Package),
-		IdentReplacements: make(map[string]string),
 		ExcludedIdents:    make(map[string]bool),
+		ProcessedPackages: make(map[string]bool),
 	}
 
 	build.patchModule()
@@ -36,14 +36,8 @@ func main() {
 	fmt.Println("Obfuscated in", buildPath)
 }
 
-type CodeReplacement struct {
-	Ident string
-	Start int
-	End   int
-}
-
 type Package struct {
-	NewName      string
+	Name         string
 	Replacements []*ast.Ident
 }
 
@@ -52,9 +46,8 @@ type ObfBuild struct {
 	NameGen           IdentGen
 	OutPath           string
 	Packages          map[string]Package
-	IdentReplacements map[string]string
 	ExcludedIdents    map[string]bool
-	ExcludedPackages  map[string]bool
+	ProcessedPackages map[string]bool
 }
 
 // Changes module name to "I"

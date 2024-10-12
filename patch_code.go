@@ -12,30 +12,44 @@ import (
 
 // Returns the resolved name of the package
 func (build *ObfBuild) patchPackage(pattern string) string {
-	cfg := &packages.Config{Mode: packages.NeedModule | packages.NeedName | packages.NeedSyntax | packages.NeedFiles}
+	// Make sure package is not processed twice
+	if _, ok := build.ProcessedPackages[pattern]; ok {
+		fmt.Println("Fast skipped processing", pattern)
+		return pattern
+	}
+
+	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedSyntax | packages.NeedFiles}
 	resolvedPkgs, err := packages.Load(cfg, pattern)
 	if err != nil {
 		log.Fatalf("Failed to load package %s: %s", pattern, err)
 	}
 	resolvedPkg := resolvedPkgs[0]
 
+	// Check package again this time using the resolved ID
+	if _, ok := build.ProcessedPackages[resolvedPkg.ID]; ok {
+		fmt.Println("Skipped processing", resolvedPkg.PkgPath)
+		return resolvedPkg.Name
+	}
+	build.ProcessedPackages[resolvedPkg.ID] = true
+
+	fmt.Println("Processing", resolvedPkg.PkgPath)
+	defer func() {
+		fmt.Println("Finished processing", resolvedPkg.PkgPath)
+	}()
+
 	// Check if this package is in the base module and so should be obfuscated
 	isInBaseModule := resolvedPkg.PkgPath == build.BaseModule || strings.HasPrefix(resolvedPkg.PkgPath, build.BaseModule+"/")
-	fmt.Println(resolvedPkg.PkgPath, isInBaseModule)
 
 	// If it is not the base module, identifiers are simply added to the exclude list to not be obfuscated.
 	if !isInBaseModule {
-		// Package should only be processed once for speed
-		if _, ok := build.ExcludedPackages[resolvedPkg.ID]; !ok {
-			build.ignoreIdentsInPackage(resolvedPkg.Syntax)
-			build.ExcludedPackages[resolvedPkg.ID] = true
-		}
+		build.ignoreIdentsInPackage(resolvedPkg.Syntax)
 		return resolvedPkg.Name
 	}
 
 	// Since it is a base module, identifiers need to be added to the list to be obfuscated.
 
 	pkg := Package{
+		Name:         resolvedPkg.Name,
 		Replacements: make([]*ast.Ident, 0),
 	}
 
@@ -46,9 +60,6 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch t := n.(type) {
-			case *ast.File: // Rename package name
-				pkg.NewName = build.getIdentReplacement(t.Name.Name)
-
 			case *ast.ImportSpec: // Collect names of imports
 				// Remove quotation marks around path
 				path := t.Path.Value[1 : len(t.Path.Value)-1]
@@ -92,7 +103,9 @@ func (build *ObfBuild) ignoreIdentsInPackage(syntax []*ast.File) {
 				}
 				return false
 			case *ast.ImportSpec: // Ignore import identifiers
-				build.patchPackage(t.Path.Value)
+				// Remove quotation marks around path
+				path := t.Path.Value[1 : len(t.Path.Value)-1]
+				build.patchPackage(path)
 				return false
 			case *ast.Ident: // Capture identifiers
 				if unicode.IsUpper(rune(t.Name[0])) {
@@ -105,7 +118,7 @@ func (build *ObfBuild) ignoreIdentsInPackage(syntax []*ast.File) {
 }
 
 // should account for public or private
-func (build *ObfBuild) getIdentReplacement(ident string) string {
+/*func (build *ObfBuild) getIdentReplacement(ident string) string {
 	if _, ok := build.ExcludedIdents[ident]; ok {
 		return ident
 	}
@@ -117,7 +130,7 @@ func (build *ObfBuild) getIdentReplacement(ident string) string {
 	build.IdentReplacements[ident] = newIdent
 	return newIdent
 }
-
+*/
 // Gets the root ident of a selector expression if it exists.
 // Used to not modify identifiers used in an import selector
 func getSelectorExprRootIdent(selector *ast.SelectorExpr) *ast.Ident {
