@@ -10,12 +10,12 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// Returns the resolved name of the package
-func (build *ObfBuild) patchPackage(pattern string) string {
+// Returns the resolved name of the package and a boolean value on whether or not it is in the base module
+func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 	// Make sure package is not processed twice
-	if _, ok := build.ProcessedPackages[pattern]; ok {
+	if isInBaseModule, ok := build.ProcessedPackages[pattern]; ok {
 		slashSplit := strings.Split(pattern, "/")
-		return slashSplit[len(slashSplit)-1]
+		return slashSplit[len(slashSplit)-1], isInBaseModule
 	}
 
 	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedSyntax | packages.NeedFiles}
@@ -25,19 +25,20 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 	}
 	resolvedPkg := resolvedPkgs[0]
 
-	// Check package again this time using the resolved ID
-	if _, ok := build.ProcessedPackages[resolvedPkg.ID]; ok {
-		return resolvedPkg.Name
-	}
-	build.ProcessedPackages[resolvedPkg.ID] = true
-
 	// Check if this package is in the base module and so should be obfuscated
 	isInBaseModule := resolvedPkg.PkgPath == build.BaseModule || strings.HasPrefix(resolvedPkg.PkgPath, build.BaseModule+"/")
+
+	// Check package again this time using the resolved ID
+	if _, ok := build.ProcessedPackages[resolvedPkg.ID]; ok {
+		return resolvedPkg.Name, isInBaseModule
+	}
+
+	build.ProcessedPackages[resolvedPkg.ID] = isInBaseModule
 
 	// If it is not the base module, identifiers are simply added to the exclude list to not be obfuscated.
 	if !isInBaseModule {
 		build.ignoreIdentsInPackage(resolvedPkg.Syntax)
-		return resolvedPkg.Name
+		return resolvedPkg.Name, isInBaseModule
 	}
 
 	// Since it is a base module, identifiers need to be added to the list to be obfuscated.
@@ -72,7 +73,7 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 			case *ast.ImportSpec: // Collect names of imports
 				// Remove quotation marks around path
 				path := t.Path.Value[1 : len(t.Path.Value)-1]
-				name := build.patchPackage(path)
+				name, inBaseModule := build.patchPackage(path)
 
 				if t.Name != nil {
 					name = t.Name.Name
@@ -80,6 +81,10 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 
 				build.ExcludedIdents[name] = true
 				importIdents[name] = true
+				// If the package is in a base module store the import so it can be modified
+				if inBaseModule {
+					build.BaseModuleImports = append(build.BaseModuleImports, t)
+				}
 				return false
 
 			case *ast.SelectorExpr: // Stop import selectors from having names changed
@@ -119,7 +124,7 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 	}
 
 	build.Packages[pattern] = pkg
-	return resolvedPkg.Name
+	return resolvedPkg.Name, isInBaseModule
 }
 
 // Adds public identifiers in a packages files to the list of identifiers to be ignored.

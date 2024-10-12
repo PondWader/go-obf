@@ -14,8 +14,6 @@ import (
 	"golang.org/x/mod/modfile"
 )
 
-// https://pkg.go.dev/go/ast#pkg-examples
-
 func main() {
 	pkg.Cow()
 
@@ -58,8 +56,22 @@ func main() {
 		identMap:        make(map[string]string),
 	}
 
+	pkgNameGen := NewIdentGen(CHARSET_LOWERCASE)
+	pkgNames := make(map[string]string)
+
 	for path, pkg := range build.Packages {
-		dirPath := filepath.Join(buildDir, path)
+		var pkgName string
+		var pkgPath string
+		if path == "." {
+			pkgName = "main"
+			pkgPath = "."
+		} else {
+			pkgName = pkgNameGen.Next()
+			pkgPath = pkgName
+			pkgNames[path] = pkgName
+		}
+
+		dirPath := filepath.Join(buildDir, pkgPath)
 		if err := os.MkdirAll(dirPath, 0600); err != nil {
 			log.Fatalf("failed to make dir %s: %s", dirPath, err)
 		}
@@ -68,6 +80,7 @@ func main() {
 
 		for _, file := range pkg.Files {
 			transform := NewTransform(file.Fset, file.Ast, file.Content)
+			transform.Replace(file.Ast.Name, pkgName)
 			remapper.ApplyReplacements(transform, file.Replacements)
 			fileName := filepath.Join(dirPath, fileNameGen.Next()+".go")
 			err := os.WriteFile(fileName, []byte(transform.content), 0600)
@@ -140,6 +153,7 @@ type ObfBuild struct {
 	Packages          map[string]Package
 	ExcludedIdents    map[string]bool
 	ProcessedPackages map[string]bool
+	BaseModuleImports []*ast.ImportSpec
 }
 
 // Changes module name to "I"
