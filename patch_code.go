@@ -64,6 +64,8 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 		f := File{
 			Content:      string(content),
 			Replacements: make([]*ast.Ident, 0),
+			Fset:         resolvedPkg.Fset,
+			Ast:          file,
 		}
 
 		importIdents := make(map[string]bool)
