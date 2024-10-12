@@ -9,3 +9,5 @@ Perhaps can use `golang.org/x/tools/go/packages`
 as seen here https://github.com/golang/example/blob/master/gotypes/doc/main.go
 
 ## CACHE IMPORTS
+
+## Imports of other packages in the module should be saved so they can be modified when names are changed

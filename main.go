@@ -17,14 +17,18 @@ import (
 const EXAMPLE_SECRET = "abc"
 
 func main() {
-	buildPath, err := os.MkdirTemp("", "go-obf-build")
-	if err != nil {
-		log.Fatalf("Failed to create build directory: %s", err)
+	buildDir := os.Getenv("OBF_BUILD_DIR")
+	if buildDir == "" {
+		buildPath, err := os.MkdirTemp("", "go-obf-build")
+		if err != nil {
+			log.Fatalf("Failed to create build directory: %s", err)
+		}
+		buildDir = buildPath
 	}
 
 	build := &ObfBuild{
 		NameGen:           NewIdentGen(CHARSET_LOWERCASE),
-		OutPath:           buildPath,
+		OutPath:           buildDir,
 		Packages:          make(map[string]Package),
 		ExcludedIdents:    make(map[string]bool),
 		ProcessedPackages: make(map[string]bool),
@@ -33,12 +37,22 @@ func main() {
 	build.patchModule()
 	build.patchPackage(".")
 
-	fmt.Println("Obfuscated in", buildPath)
+	// apply patches
+	/*for path, pkg := range build.Packages {
+
+	}*/
+
+	fmt.Println("Obfuscated in", buildDir)
+}
+
+type File struct {
+	Content      string
+	Replacements []*ast.Ident
 }
 
 type Package struct {
-	Name         string
-	Replacements []*ast.Ident
+	Name  string
+	Files []File
 }
 
 type ObfBuild struct {

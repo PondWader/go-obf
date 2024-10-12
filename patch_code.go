@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"log"
+	"os"
 	"strings"
 	"unicode"
 
@@ -49,12 +50,21 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 	// Since it is a base module, identifiers need to be added to the list to be obfuscated.
 
 	pkg := Package{
-		Name:         resolvedPkg.Name,
-		Replacements: make([]*ast.Ident, 0),
+		Name:  resolvedPkg.Name,
+		Files: make([]File, len(resolvedPkg.Syntax)),
 	}
 
-	for _, file := range resolvedPkg.Syntax {
-		resolvedPkg.Fset.File(file.Pos()).Name()
+	for i, file := range resolvedPkg.Syntax {
+		filePath := resolvedPkg.Fset.File(file.Pos()).Name()
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Fatalf("failed to read %s: %s", filePath, err)
+		}
+
+		f := File{
+			Content:      string(content),
+			Replacements: make([]*ast.Ident, 0),
+		}
 
 		importIdents := make(map[string]bool)
 
@@ -81,11 +91,13 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 				}
 
 			case *ast.Ident:
-				pkg.Replacements = append(pkg.Replacements, t)
+				f.Replacements = append(f.Replacements, t)
 			}
 
 			return true
 		})
+
+		pkg.Files[i] = f
 	}
 
 	build.Packages[pattern] = pkg
