@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"go/ast"
 	"log"
 	"os"
 	"path/filepath"
@@ -16,30 +17,47 @@ import (
 const EXAMPLE_SECRET = "abc"
 
 func main() {
-	gen := &IdentGen{}
-	for i := 0; i < 52*52+500; i++ {
-		fmt.Println(gen.Next())
-	}
-	os.Exit(0)
-
 	buildPath, err := os.MkdirTemp("", "go-obf-build")
 	if err != nil {
 		log.Fatalf("Failed to create build directory: %s", err)
 	}
 
 	build := &ObfBuild{
-		OutPath: buildPath,
+		NameGen:           NewIdentGen(CHARSET_LOWERCASE),
+		OutPath:           buildPath,
+		Packages:          make(map[string]Package),
+		IdentReplacements: make(map[string]string),
+		ExcludedIdents:    make(map[string]bool),
 	}
 
 	build.patchModule()
+	build.patchPackage(".")
 
 	fmt.Println("Obfuscated in", buildPath)
 }
 
-type ObfBuild struct {
-	OutPath string
+type CodeReplacement struct {
+	Ident string
+	Start int
+	End   int
 }
 
+type Package struct {
+	NewName      string
+	Replacements []*ast.Ident
+}
+
+type ObfBuild struct {
+	BaseModule        string
+	NameGen           IdentGen
+	OutPath           string
+	Packages          map[string]Package
+	IdentReplacements map[string]string
+	ExcludedIdents    map[string]bool
+	ExcludedPackages  map[string]bool
+}
+
+// Changes module name to "I"
 func (build *ObfBuild) patchModule() {
 	modData, err := os.ReadFile("go.mod")
 	if errors.Is(err, os.ErrNotExist) {
@@ -52,6 +70,9 @@ func (build *ObfBuild) patchModule() {
 	if err != nil {
 		log.Fatalf("failed to parse go.mod: %s", err)
 	}
+
+	// Store original module name in build data
+	build.BaseModule = file.Module.Mod.Path
 
 	// Set module name to "I"
 	file.AddModuleStmt("I")
