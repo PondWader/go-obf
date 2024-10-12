@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"go/ast"
 	"log"
 	"os"
@@ -15,8 +14,8 @@ import (
 func (build *ObfBuild) patchPackage(pattern string) string {
 	// Make sure package is not processed twice
 	if _, ok := build.ProcessedPackages[pattern]; ok {
-		fmt.Println("Fast skipped processing", pattern)
-		return pattern
+		slashSplit := strings.Split(pattern, "/")
+		return slashSplit[len(slashSplit)-1]
 	}
 
 	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedSyntax | packages.NeedFiles}
@@ -28,15 +27,9 @@ func (build *ObfBuild) patchPackage(pattern string) string {
 
 	// Check package again this time using the resolved ID
 	if _, ok := build.ProcessedPackages[resolvedPkg.ID]; ok {
-		fmt.Println("Skipped processing", resolvedPkg.PkgPath)
 		return resolvedPkg.Name
 	}
 	build.ProcessedPackages[resolvedPkg.ID] = true
-
-	fmt.Println("Processing", resolvedPkg.PkgPath)
-	defer func() {
-		fmt.Println("Finished processing", resolvedPkg.PkgPath)
-	}()
 
 	// Check if this package is in the base module and so should be obfuscated
 	isInBaseModule := resolvedPkg.PkgPath == build.BaseModule || strings.HasPrefix(resolvedPkg.PkgPath, build.BaseModule+"/")
@@ -131,20 +124,6 @@ func (build *ObfBuild) ignoreIdentsInPackage(syntax []*ast.File) {
 	}
 }
 
-// should account for public or private
-/*func (build *ObfBuild) getIdentReplacement(ident string) string {
-	if _, ok := build.ExcludedIdents[ident]; ok {
-		return ident
-	}
-	newIdent, ok := build.IdentReplacements[ident]
-	if ok {
-		return newIdent
-	}
-	newIdent = build.NameGen.Next()
-	build.IdentReplacements[ident] = newIdent
-	return newIdent
-}
-*/
 // Gets the root ident of a selector expression if it exists.
 // Used to not modify identifiers used in an import selector
 func getSelectorExprRootIdent(selector *ast.SelectorExpr) *ast.Ident {

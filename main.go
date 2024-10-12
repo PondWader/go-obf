@@ -15,9 +15,6 @@ import (
 
 // https://pkg.go.dev/go/ast#pkg-examples
 
-//obf:protect
-const EXAMPLE_SECRET = "abc"
-
 func main() {
 	buildDir := os.Getenv("OBF_BUILD_DIR")
 	if buildDir == "" {
@@ -32,7 +29,9 @@ func main() {
 		}
 	}
 
-	excludedIdents := make(map[string]bool)
+	// Start by excluding special names
+	excludedIdents := map[string]bool{"main": true, "_": true}
+	// Exclude builtins
 	for _, builtin := range builtins {
 		excludedIdents[builtin] = true
 	}
@@ -45,6 +44,7 @@ func main() {
 		ProcessedPackages: make(map[string]bool),
 	}
 
+	build.copyGoSum()
 	build.patchModule()
 	build.patchPackage(".")
 
@@ -97,12 +97,20 @@ func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacemen
 
 		replacementIdent, ok := remapper.identMap[name]
 		if !ok {
-			if unicode.IsUpper(rune(name[0])) {
-				replacementIdent = remapper.PublicIdentGen.Next()
-			} else {
-				replacementIdent = remapper.PrivateIdentGen.Next()
+		genLoop:
+			for {
+				if unicode.IsUpper(rune(name[0])) {
+					replacementIdent = remapper.PublicIdentGen.Next()
+				} else {
+					replacementIdent = remapper.PrivateIdentGen.Next()
+				}
+
+				// Check that the identifier isn't reserved and if it is, skip it
+				if _, ok := remapper.Build.ExcludedIdents[replacementIdent]; !ok {
+					remapper.identMap[name] = replacementIdent
+					break genLoop
+				}
 			}
-			remapper.identMap[name] = replacementIdent
 		}
 
 		transform.Replace(replacement, replacementIdent)
@@ -157,5 +165,16 @@ func (build *ObfBuild) patchModule() {
 	err = os.WriteFile(filepath.Join(build.OutPath, "go.mod"), out, 0600)
 	if err != nil {
 		log.Fatalf("failed to write go.mod: %s", err)
+	}
+}
+
+func (build *ObfBuild) copyGoSum() {
+	data, err := os.ReadFile("go.sum")
+	if err != nil {
+		log.Fatalf("Failed to read go.sum: %s", err)
+	}
+	err = os.WriteFile(filepath.Join(build.OutPath, "go.sum"), data, 0600)
+	if err != nil {
+		log.Fatalf("Failed to write go.sum: %s", err)
 	}
 }
