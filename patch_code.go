@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -18,10 +19,12 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 		return slashSplit[len(slashSplit)-1], isInBaseModule
 	}
 
-	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedSyntax | packages.NeedFiles}
+	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedSyntax | packages.NeedFiles | packages.NeedEmbedFiles}
 	resolvedPkgs, err := packages.Load(cfg, pattern)
 	if err != nil {
-		log.Fatalf("Failed to load package %s: %s", pattern, err)
+		log.Default().Printf("failed to load package %s: %s", pattern, err)
+		log.Default().Print("this may cause problems but will be ignored")
+		return "", false
 	}
 	resolvedPkg := resolvedPkgs[0]
 
@@ -44,8 +47,19 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 	// Since it is a base module, identifiers need to be added to the list to be obfuscated.
 
 	pkg := Package{
-		Name:  resolvedPkg.Name,
-		Files: make([]File, len(resolvedPkg.Syntax)),
+		Name:    resolvedPkg.Name,
+		Pattern: pattern,
+		Files:   make([]File, len(resolvedPkg.Syntax)),
+		Embeds:  make(map[string][]byte),
+	}
+
+	for _, embedFile := range resolvedPkg.EmbedFiles {
+		data, err := os.ReadFile(embedFile)
+		if err != nil {
+			log.Fatalf("failed to read embed file %s: %s", embedFile, err)
+		}
+		_, path := filepath.Split(embedFile)
+		pkg.Embeds[path] = data
 	}
 
 	fset := resolvedPkg.Fset
@@ -72,6 +86,11 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch t := n.(type) {
 			case *ast.ImportSpec: // Collect names of imports
+				// Skip unusable imports
+				if t.Name != nil && t.Name.Name == "_" {
+					return false
+				}
+
 				// Remove quotation marks around path
 				path := t.Path.Value[1 : len(t.Path.Value)-1]
 				name, inBaseModule := build.patchPackage(path)
@@ -130,7 +149,7 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 		pkg.Files[i] = f
 	}
 
-	build.Packages[pattern] = pkg
+	build.Packages = append(build.Packages, pkg)
 	return resolvedPkg.Name, isInBaseModule
 }
 
@@ -145,6 +164,11 @@ func (build *ObfBuild) ignoreIdentsInPackage(syntax []*ast.File) {
 				}
 				return false
 			case *ast.ImportSpec: // Ignore import identifiers
+				// Skip unusable imports
+				if t.Name != nil && t.Name.Name == "_" {
+					return false
+				}
+
 				// Remove quotation marks around path
 				path := t.Path.Value[1 : len(t.Path.Value)-1]
 				build.patchPackage(path)

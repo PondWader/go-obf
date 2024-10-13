@@ -10,13 +10,10 @@ import (
 	"path/filepath"
 	"unicode"
 
-	"github.com/PondWader/go-obf/pkg"
 	"golang.org/x/mod/modfile"
 )
 
 func main() {
-	pkg.Cow()
-
 	buildDir := os.Getenv("OBF_BUILD_DIR")
 	if buildDir == "" {
 		buildPath, err := os.MkdirTemp("", "go-obf-build")
@@ -40,7 +37,7 @@ func main() {
 	build := &ObfBuild{
 		NameGen:           NewIdentGen(CHARSET_LOWERCASE),
 		OutPath:           buildDir,
-		Packages:          make(map[string]Package),
+		Packages:          make([]Package, 0),
 		ExcludedIdents:    excludedIdents,
 		ProcessedPackages: make(map[string]bool),
 	}
@@ -58,7 +55,9 @@ func main() {
 
 	pkgNames := make(map[string]string)
 
-	for path, pkg := range build.Packages {
+	for _, pkg := range build.Packages {
+		path := pkg.Pattern
+
 		var pkgName string
 		var pkgPath string
 		if path == "." {
@@ -98,6 +97,12 @@ func main() {
 			err := os.WriteFile(fileName, []byte(transform.content), 0600)
 			if err != nil {
 				log.Fatalf("failed to write to %s: %s", fileName, err)
+			}
+		}
+
+		for name, data := range pkg.Embeds {
+			if err := os.WriteFile(filepath.Join(dirPath, name), data, 0600); err != nil {
+				log.Fatalf("failed to write embed file %s", name)
 			}
 		}
 	}
@@ -160,15 +165,17 @@ type File struct {
 }
 
 type Package struct {
-	Name  string
-	Files []File
+	Name    string
+	Pattern string
+	Files   []File
+	Embeds  map[string][]byte
 }
 
 type ObfBuild struct {
 	BaseModule        string
 	NameGen           IdentGen
 	OutPath           string
-	Packages          map[string]Package
+	Packages          []Package
 	ExcludedIdents    map[string]bool
 	ProcessedPackages map[string]bool
 }
