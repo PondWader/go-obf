@@ -80,11 +80,13 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 					name = t.Name.Name
 				}
 
-				build.ExcludedIdents[name] = true
-				importIdents[name] = true
 				// If the package is in a base module store the import so it can be modified
 				if inBaseModule {
 					f.BaseModuleImports = append(f.BaseModuleImports, t)
+				} else {
+					// Otherwise we want to leave the name unmodified
+					build.ExcludedIdents[name] = true
+					importIdents[name] = true
 				}
 				return false
 
@@ -97,6 +99,10 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 				}
 
 			case *ast.Ident:
+				// Skip identifier in package declaration since it's stored in the file
+				if t == f.Ast.Name {
+					return true
+				}
 				f.Replacements = append(f.Replacements, t)
 
 			case *ast.Comment:

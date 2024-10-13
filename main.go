@@ -81,6 +81,9 @@ func main() {
 			transform := NewTransform(file.Fset, file.Ast, file.Content)
 			transform.Replace(file.Ast.Name, pkgName)
 
+			fmt.Println("Replcaing", file.Ast.Name, "with", pkgName)
+
+			fmt.Println("BaseModuleImports:", file.BaseModuleImports)
 			for _, importSpec := range file.BaseModuleImports {
 				// Remove quotation marks around import path
 				importPath := importSpec.Path.Value[1 : len(importSpec.Path.Value)-1]
