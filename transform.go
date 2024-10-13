@@ -30,13 +30,18 @@ func (t *CodeTransform) Walk(visit func(n ast.Node) bool) error {
 }
 
 func (t *CodeTransform) Replace(n ast.Node, v string) {
-	start := t.fset.Position(n.Pos()).Offset + t.replaceOffset
-	end := t.fset.Position(n.End()).Offset + t.replaceOffset
+	start, end := t.GetPosition(n)
 
 	t.content = t.content[:start] + v + t.content[end:]
 
 	nodeLength := end - start
 	t.replaceOffset += len(v) - nodeLength
+}
+
+func (t *CodeTransform) GetPosition(n ast.Node) (start int, end int) {
+	start = t.fset.Position(n.Pos()).Offset + t.replaceOffset
+	end = t.fset.Position(n.End()).Offset + t.replaceOffset
+	return
 }
 
 func (t *CodeTransform) String() string {

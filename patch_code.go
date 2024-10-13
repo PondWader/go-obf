@@ -58,10 +58,11 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 		}
 
 		f := File{
-			Content:      string(content),
-			Replacements: make([]*ast.Ident, 0),
-			Fset:         fset,
-			Ast:          file,
+			Content:           string(content),
+			Replacements:      make([]*ast.Ident, 0),
+			Fset:              fset,
+			Ast:               file,
+			BaseModuleImports: make([]*ast.ImportSpec, 0),
 		}
 
 		importIdents := make(map[string]bool)
@@ -83,7 +84,7 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 				importIdents[name] = true
 				// If the package is in a base module store the import so it can be modified
 				if inBaseModule {
-					build.BaseModuleImports = append(build.BaseModuleImports, t)
+					f.BaseModuleImports = append(f.BaseModuleImports, t)
 				}
 				return false
 

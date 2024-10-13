@@ -56,7 +56,6 @@ func main() {
 		identMap:        make(map[string]string),
 	}
 
-	pkgNameGen := NewIdentGen(CHARSET_LOWERCASE)
 	pkgNames := make(map[string]string)
 
 	for path, pkg := range build.Packages {
@@ -66,7 +65,7 @@ func main() {
 			pkgName = "main"
 			pkgPath = "."
 		} else {
-			pkgName = pkgNameGen.Next()
+			pkgName = remapper.GetReplcement(pkg.Name)
 			pkgPath = pkgName
 			pkgNames[path] = pkgName
 		}
@@ -81,6 +80,21 @@ func main() {
 		for _, file := range pkg.Files {
 			transform := NewTransform(file.Fset, file.Ast, file.Content)
 			transform.Replace(file.Ast.Name, pkgName)
+
+			for _, importSpec := range file.BaseModuleImports {
+				// Remove quotation marks around import path
+				importPath := importSpec.Path.Value[1 : len(importSpec.Path.Value)-1]
+				fmt.Println("Changing", importPath, "with", pkgNames)
+				newPkgName, ok := pkgNames[importPath]
+				if !ok {
+					fmt.Println("Not found")
+					continue
+				}
+				newPath := "I/" + newPkgName
+				fmt.Println(importSpec.Path.Value, newPath)
+				transform.Replace(importSpec.Path, `"`+newPath+`"`)
+			}
+
 			remapper.ApplyReplacements(transform, file.Replacements)
 			fileName := filepath.Join(dirPath, fileNameGen.Next()+".go")
 			err := os.WriteFile(fileName, []byte(transform.content), 0600)
@@ -111,34 +125,40 @@ func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacemen
 			continue
 		}
 
-		replacementIdent, ok := remapper.identMap[name]
-		if !ok {
-		genLoop:
-			for {
-				if unicode.IsUpper(rune(name[0])) {
-					replacementIdent = remapper.PublicIdentGen.Next()
-				} else {
-					replacementIdent = remapper.PrivateIdentGen.Next()
-				}
-
-				// Check that the identifier isn't reserved and if it is, skip it
-				if _, ok := remapper.Build.ExcludedIdents[replacementIdent]; !ok {
-					remapper.identMap[name] = replacementIdent
-					break genLoop
-				}
-			}
-		}
+		replacementIdent := remapper.GetReplcement(name)
 
 		transform.Replace(replacement, replacementIdent)
 	}
 }
 
+func (remapper *Remapper) GetReplcement(name string) string {
+	replacementIdent, ok := remapper.identMap[name]
+	if !ok {
+	genLoop:
+		for {
+			if unicode.IsUpper(rune(name[0])) {
+				replacementIdent = remapper.PublicIdentGen.Next()
+			} else {
+				replacementIdent = remapper.PrivateIdentGen.Next()
+			}
+
+			// Check that the identifier isn't reserved and if it is, skip it
+			if _, ok := remapper.Build.ExcludedIdents[replacementIdent]; !ok {
+				remapper.identMap[name] = replacementIdent
+				break genLoop
+			}
+		}
+	}
+	return replacementIdent
+}
+
 //obf:preserve-fields
 type File struct {
-	Content      string
-	Replacements []*ast.Ident
-	Fset         *token.FileSet
-	Ast          *ast.File
+	Content           string
+	Replacements      []*ast.Ident
+	Fset              *token.FileSet
+	Ast               *ast.File
+	BaseModuleImports []*ast.ImportSpec
 }
 
 type Package struct {
@@ -153,7 +173,6 @@ type ObfBuild struct {
 	Packages          map[string]Package
 	ExcludedIdents    map[string]bool
 	ProcessedPackages map[string]bool
-	BaseModuleImports []*ast.ImportSpec
 }
 
 // Changes module name to "I"
