@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/ast"
+	"go/token"
 	"log"
 	"os"
 	"path/filepath"
@@ -73,7 +74,7 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 
 		f := File{
 			Content:           string(content),
-			Replacements:      make([]*ast.Ident, 0),
+			Replacements:      make([]FileReplacement, 0),
 			Fset:              fset,
 			Ast:               file,
 			BaseModuleImports: make([]*ast.ImportSpec, 0),
@@ -82,6 +83,7 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 		importIdents := make(map[string]bool)
 
 		preserveFieldsLine := -1
+		protectStringLine := -1
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch t := n.(type) {
@@ -122,12 +124,54 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 				if t == f.Ast.Name {
 					return true
 				}
-				f.Replacements = append(f.Replacements, t)
+				f.Replacements = append(f.Replacements, FileReplacement{
+					Ident: t,
+				})
 
 			case *ast.Comment:
 				line := fset.Position(t.Pos()).Line
-				if strings.TrimSpace(t.Text) == "//obf:preserve-fields" {
+				trimmed := strings.TrimSpace(t.Text)
+				if trimmed == "//obf:preserve-fields" {
 					preserveFieldsLine = line
+				} else if trimmed == "//obf:protect" {
+					protectStringLine = line
+				}
+
+			case *ast.GenDecl:
+				if t.Doc != nil && len(t.Doc.List) > 0 {
+					lastComment := t.Doc.List[len(t.Doc.List)-1].Text
+					trimmed := strings.TrimSpace(lastComment)
+
+					if trimmed == "//obf:protect" && t.Tok != token.VAR {
+						log.Fatalf("protected strings must be variable and not %s", t.Tok)
+					}
+				}
+
+			case *ast.ValueSpec:
+				line := fset.Position(t.Pos()).Line
+				if line == protectStringLine+1 {
+					for _, name := range t.Names {
+						f.Replacements = append(f.Replacements, FileReplacement{
+							Ident: name,
+						})
+					}
+
+					for _, val := range t.Values {
+						literal, ok := val.(*ast.BasicLit)
+						if !ok || literal.Kind != token.STRING {
+							log.Fatalf("protected values must be string literals")
+						}
+						// Remove quotation marks
+						str := literal.Value[1 : len(literal.Value)-1]
+						funcName, funcDecl := createProtectedStringFunc(str)
+
+						f.Replacements = append(f.Replacements, FileReplacement{
+							Node:   val,
+							NewVal: funcName + "()",
+						})
+						f.AppendContent += funcDecl + "\n\n"
+					}
+					return false
 				}
 
 			case *ast.StructType:

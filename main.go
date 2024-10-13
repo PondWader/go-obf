@@ -94,7 +94,8 @@ func main() {
 
 			remapper.ApplyReplacements(transform, file.Replacements)
 			fileName := filepath.Join(dirPath, fileNameGen.Next()+".go")
-			err := os.WriteFile(fileName, []byte(transform.content), 0600)
+			content := []byte(transform.content + file.AppendContent)
+			err := os.WriteFile(fileName, content, 0600)
 			if err != nil {
 				log.Fatalf("failed to write to %s: %s", fileName, err)
 			}
@@ -118,19 +119,23 @@ type Remapper struct {
 	identMap map[string]string
 }
 
-func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacements []*ast.Ident) {
+func (remapper *Remapper) ApplyReplacements(transform *CodeTransform, replacements []FileReplacement) {
 	build := remapper.Build
 
 	for _, replacement := range replacements {
-		name := replacement.Name
+		if replacement.Ident != nil {
+			name := replacement.Ident.Name
 
-		if _, ok := build.ExcludedIdents[name]; ok {
-			continue
+			if _, ok := build.ExcludedIdents[name]; ok {
+				continue
+			}
+
+			replacementIdent := remapper.GetReplcement(name)
+
+			transform.Replace(replacement.Ident, replacementIdent)
+		} else {
+			transform.Replace(replacement.Node, replacement.NewVal)
 		}
-
-		replacementIdent := remapper.GetReplcement(name)
-
-		transform.Replace(replacement, replacementIdent)
 	}
 }
 
@@ -155,13 +160,22 @@ func (remapper *Remapper) GetReplcement(name string) string {
 	return replacementIdent
 }
 
+// Either ident should be set or it should be nil and Node and NewVal set
+type FileReplacement struct {
+	Ident *ast.Ident
+
+	Node   ast.Node
+	NewVal string
+}
+
 //obf:preserve-fields
 type File struct {
 	Content           string
-	Replacements      []*ast.Ident
+	Replacements      []FileReplacement
 	Fset              *token.FileSet
 	Ast               *ast.File
 	BaseModuleImports []*ast.ImportSpec
+	AppendContent     string
 }
 
 type Package struct {
