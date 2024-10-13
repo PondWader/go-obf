@@ -81,20 +81,15 @@ func main() {
 			transform := NewTransform(file.Fset, file.Ast, file.Content)
 			transform.Replace(file.Ast.Name, pkgName)
 
-			fmt.Println("Replcaing", file.Ast.Name, "with", pkgName)
-
-			fmt.Println("BaseModuleImports:", file.BaseModuleImports)
+			// Replace imports of package within the base module with obfuscated names
 			for _, importSpec := range file.BaseModuleImports {
 				// Remove quotation marks around import path
 				importPath := importSpec.Path.Value[1 : len(importSpec.Path.Value)-1]
-				fmt.Println("Changing", importPath, "with", pkgNames)
 				newPkgName, ok := pkgNames[importPath]
 				if !ok {
-					fmt.Println("Not found")
 					continue
 				}
 				newPath := "I/" + newPkgName
-				fmt.Println(importSpec.Path.Value, newPath)
 				transform.Replace(importSpec.Path, `"`+newPath+`"`)
 			}
 
