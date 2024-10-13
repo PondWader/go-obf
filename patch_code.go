@@ -183,7 +183,6 @@ func (build *ObfBuild) patchPackage(pattern string) (string, bool) {
 							build.ExcludedIdents[name.Name] = true
 						}
 					}
-					return false
 				}
 			}
 
