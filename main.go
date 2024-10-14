@@ -2,11 +2,13 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/token"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"unicode"
 
@@ -14,6 +16,19 @@ import (
 )
 
 func main() {
+	output := flag.String("o", "", "")
+	flag.Parse()
+	if *output == "" {
+		log.Fatalf("expected -o flag with output name")
+	}
+
+	args := flag.Args()
+
+	if len(args) == 0 {
+		log.Fatalf("expected build path as lastargument")
+	}
+	pkgPath := os.Args[len(os.Args)-1]
+
 	buildDir := os.Getenv("OBF_BUILD_DIR")
 	if buildDir == "" {
 		buildPath, err := os.MkdirTemp("", "go-obf-build")
@@ -26,6 +41,9 @@ func main() {
 			log.Fatalf("failed to create build directory: %s", err)
 		}
 	}
+	defer func() {
+		os.RemoveAll(buildDir)
+	}()
 
 	// Start by excluding special names
 	excludedIdents := map[string]bool{"main": true, "_": true}
@@ -44,7 +62,7 @@ func main() {
 
 	build.copyGoSum()
 	build.patchModule()
-	build.patchPackage(".")
+	build.patchPackage(filepath.Join(".", pkgPath))
 
 	remapper := Remapper{
 		Build:           build,
@@ -109,6 +127,18 @@ func main() {
 	}
 
 	fmt.Println("Obfuscated in", buildDir)
+	fmt.Println("Building...")
+
+	outFile, err := filepath.Abs(*output)
+	if err != nil {
+		log.Fatalf("failed to resolve %s", outFile)
+	}
+
+	cmd := exec.Command("go", append(append([]string{"build", "-o", outFile}, args[:len(args)-1]...), filepath.Join(buildDir, pkgPath))...)
+	cmd.Dir = buildDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
 }
 
 type Remapper struct {
