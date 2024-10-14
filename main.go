@@ -134,7 +134,7 @@ func main() {
 		log.Fatalf("failed to resolve %s", outFile)
 	}
 
-	cmd := exec.Command("go", append(append([]string{"build", "-o", outFile}, args[:len(args)-1]...), filepath.Join(buildDir, pkgPath))...)
+	cmd := exec.Command("go", append(append([]string{"build", "-trimpath", "-ldflags", "-w -s -buildid=", "-o", outFile}, args[:len(args)-1]...), filepath.Join(buildDir, pkgPath))...)
 	cmd.Dir = buildDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
