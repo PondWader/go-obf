@@ -136,7 +136,7 @@ func main() {
 	}
 
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", "-w -s -buildid=", "-buildvcs=false", "-o", outFile, filepath.Join(buildDir, pkgPath))
-	cmd.Env = append(cmd.Env, "GOFLAGS="+*goFlags)
+	cmd.Env = append(os.Environ(), "GOFLAGS="+*goFlags)
 
 	cmd.Dir = buildDir
 	cmd.Stdout = os.Stdout
