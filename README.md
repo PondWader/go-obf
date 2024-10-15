@@ -4,7 +4,7 @@ Obfuscate go projects by renaming identifiers in the main package.
 
 ## Installation
 ```
-go install github.com/PondWader/go-obf@latest
+go install github.com/pondwader/go-obf@latest
 ```
 
 ## Usage

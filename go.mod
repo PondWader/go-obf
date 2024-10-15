@@ -1,4 +1,4 @@
-module github.com/PondWader/go-obf
+module github.com/pondwader/go-obf
 
 go 1.23.2
 
