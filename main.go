@@ -38,7 +38,7 @@ func main() {
 		}
 		buildDir = buildPath
 	} else {
-		if err := os.MkdirAll(buildDir, 0660); err != nil {
+		if err := os.MkdirAll(buildDir, 0770); err != nil {
 			log.Fatalf("failed to create build directory: %s", err)
 		}
 	}
@@ -89,7 +89,7 @@ func main() {
 		}
 
 		dirPath := filepath.Join(buildDir, pkgPath)
-		if err := os.MkdirAll(dirPath, 0660); err != nil {
+		if err := os.MkdirAll(dirPath, 0770); err != nil {
 			log.Fatalf("failed to make dir %s: %s", dirPath, err)
 		}
 
