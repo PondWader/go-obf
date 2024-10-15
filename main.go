@@ -16,7 +16,8 @@ import (
 )
 
 func main() {
-	output := flag.String("o", "", "")
+	output := flag.String("o", "", "Path of output file")
+	goFlags := flag.String("go-flags", "", "Flags to pass to go")
 	flag.Parse()
 	if *output == "" {
 		log.Fatalf("expected -o flag with output name")
@@ -134,7 +135,9 @@ func main() {
 		log.Fatalf("failed to resolve %s", outFile)
 	}
 
-	cmd := exec.Command("go", append(append([]string{"build", "-trimpath", "-ldflags", "-w -s -buildid=", "-o", outFile}, args[:len(args)-1]...), filepath.Join(buildDir, pkgPath))...)
+	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", "-w -s -buildid=", "-buildvcs=false", "-o", outFile, filepath.Join(buildDir, pkgPath))
+	cmd.Env = append(cmd.Env, "GOFLAGS="+*goFlags)
+
 	cmd.Dir = buildDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

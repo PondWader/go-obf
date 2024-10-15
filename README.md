@@ -12,6 +12,12 @@ go install github.com/pondwader/go-obf@latest
 go-obf -o ./out.exe .
 ```
 
+`-go-flags` can be passed to specify flags to pass to `go build`. For example:
+```
+go-obf -o ./out.exe -go-flags "-v" .
+```
+This works by overriding the `GOFLAGS` environment variable.
+
 ## Directives
 Placing `//obf:preserve-fields` above a struct declaration will prevent the field names from being obfuscated which can be neccesary if use with reflection.
 ```go
