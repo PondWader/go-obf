@@ -1,13 +1,28 @@
-The plan
-- all identifiers get replaced with the same thing through the project
-- //obf:preserve-fields will preserve the field names of a struct
-- //obf:protect before a constant string will make  a generator function for it 
+# go-obf
 
-new plan new plan new plan
-all imports get crawled, any public values found in structs or function names or whatever, get added to the exclude idents
-Perhaps can use `golang.org/x/tools/go/packages`
-as seen here https://github.com/golang/example/blob/master/gotypes/doc/main.go
+Obfuscate go projects by renaming identifiers in the main package.
 
-## CACHE IMPORTS
+## Installation
+```
+go install github.com/PondWader/go-obf@latest
+```
 
-## Imports of other packages in the module should be saved so they can be modified when names are changed
+## Usage
+```
+go-obf -o ./out.exe .
+```
+
+## Directives
+Placing `//obf:preserve-fields` above a struct declaration will prevent the field names from being obfuscated which can be neccesary if use with reflection.
+```go
+//obf:preserve-fields
+type Example struct {
+    A string
+    B int
+}
+```
+Placing `//obf:protect` above a string variable will protect the string value from being dumped from the resulting binary.
+```go
+//obf:protect
+var ProtectedString = "hi"
+```
