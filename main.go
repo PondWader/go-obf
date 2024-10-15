@@ -38,7 +38,7 @@ func main() {
 		}
 		buildDir = buildPath
 	} else {
-		if err := os.MkdirAll(buildDir, 0600); err != nil {
+		if err := os.MkdirAll(buildDir, 0660); err != nil {
 			log.Fatalf("failed to create build directory: %s", err)
 		}
 	}
@@ -89,7 +89,7 @@ func main() {
 		}
 
 		dirPath := filepath.Join(buildDir, pkgPath)
-		if err := os.MkdirAll(dirPath, 0600); err != nil {
+		if err := os.MkdirAll(dirPath, 0660); err != nil {
 			log.Fatalf("failed to make dir %s: %s", dirPath, err)
 		}
 
@@ -114,14 +114,14 @@ func main() {
 			remapper.ApplyReplacements(transform, file.Replacements)
 			fileName := filepath.Join(dirPath, fileNameGen.Next()+".go")
 			content := []byte(transform.content + file.AppendContent)
-			err := os.WriteFile(fileName, content, 0600)
+			err := os.WriteFile(fileName, content, 0660)
 			if err != nil {
 				log.Fatalf("failed to write to %s: %s", fileName, err)
 			}
 		}
 
 		for name, data := range pkg.Embeds {
-			if err := os.WriteFile(filepath.Join(dirPath, name), data, 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(dirPath, name), data, 0660); err != nil {
 				log.Fatalf("failed to write embed file %s", name)
 			}
 		}
@@ -251,7 +251,7 @@ func (build *ObfBuild) patchModule() {
 	if err != nil {
 		log.Fatalf("failed to format go.mod: %s", err)
 	}
-	err = os.WriteFile(filepath.Join(build.OutPath, "go.mod"), out, 0600)
+	err = os.WriteFile(filepath.Join(build.OutPath, "go.mod"), out, 0660)
 	if err != nil {
 		log.Fatalf("failed to write go.mod: %s", err)
 	}
@@ -262,7 +262,7 @@ func (build *ObfBuild) copyGoSum() {
 	if err != nil {
 		log.Fatalf("Failed to read go.sum: %s", err)
 	}
-	err = os.WriteFile(filepath.Join(build.OutPath, "go.sum"), data, 0600)
+	err = os.WriteFile(filepath.Join(build.OutPath, "go.sum"), data, 0660)
 	if err != nil {
 		log.Fatalf("Failed to write go.sum: %s", err)
 	}
